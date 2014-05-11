@@ -1,0 +1,29 @@
+{
+    "uuid": "7be0d6de-b124-4322-8fcc-eeb6ed039a62",
+    "shortName": "Faster",
+    "longName": "Faster Than Walking",
+    "companyName": "Spencer Elliott",
+    "versionCode": 1,
+    "versionLabel": "0.0.1",
+    "watchapp": {
+        "watchface": false
+    },
+    "appKeys": {
+        "dummy": 0
+    },
+    "resources": {
+        "media": [
+            {
+                "type": "png",
+                "name": "IMAGE_LOGO",
+                "file": "images/pebble-app-icon-large.png"
+            },
+            {
+                "menuIcon": true,
+                "type": "png",
+                "name": "IMAGE_MENU_ICON",
+                "file": "images/pebble-menu-image.png"
+            }
+        ]
+    }
+}
