@@ -4,12 +4,9 @@
     "longName": "Faster Than Walking",
     "companyName": "Spencer Elliott",
     "versionCode": 1,
-    "versionLabel": "0.0.1",
+    "versionLabel": "1.0.0",
     "watchapp": {
         "watchface": false
-    },
-    "appKeys": {
-        "dummy": 0
     },
     "resources": {
         "media": [

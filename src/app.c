@@ -27,6 +27,7 @@ static char *prediction_text;
 // A list of stops by section
 static StopList *stop_list;
 
+static StopSection *current_section;
 static Stop *current_stop;
 
 /**********************************************************
@@ -118,7 +119,7 @@ static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t s
  * Draws the section header at section_index
  */
 static void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t section_index, void *data) {
-    menu_cell_basic_header_draw(ctx, cell_layer, stop_list->sections[section_index]->section_title);
+    menu_cell_basic_header_draw(ctx, cell_layer, stop_list->sections[section_index]->stop_title);
 }
 
 /*
@@ -135,8 +136,9 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
  * Called when the user selects a menu item.
  * Open the stop window with the selected stop information.
  */
-void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
-    current_stop = stop_list->sections[cell_index->section]->stops[cell_index->row];
+static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
+    current_section = stop_list->sections[cell_index->section];
+    current_stop = current_section->stops[cell_index->row];
     window_stack_push(stop_window, true /* animated */);
 }
 
@@ -191,7 +193,7 @@ static void menu_window_disappear(Window *window) {
  * Destroy any layers associated with the window.
  */
 static void menu_window_unload(Window *window) {
-
+    menu_layer_destroy(menu_layer);
 }
 
 /*
@@ -212,41 +214,24 @@ static void init_menu_window() {
  **********************************************************/
 
 /*
- * Returns a formatted string for displaying predictions on screen
- */
-char *format_prediction(int prediction[2]) {
-    if (prediction[0] < 0) return "N/A";
-
-    char format[10];
-    strcat(format, prediction[0] == 0 ? "Due" : "%d");
-    if (prediction[1] >= 0) {
-        strcat(format, " & ");
-        strcat(format, prediction[1] == 0 ? "Due" : "%d");
-    }
-
-    char *formatted_prediction = malloc(10);
-    sprintf(formatted_prediction, format, prediction[0], prediction[1]);
-    return formatted_prediction;
-}
-
-/*
- * Pluralizes "minutes" if necessary, or omits it if vehicles are due
- */
-char *format_minutes(int prediction[2]) {
-    return "minutes";
-}
-
-/*
  * Set the text in the stop window
  */
-void stop_window_set_text(char *route_title, char *direction_title, char *stop_title, int prediction[2]) {
+static void stop_window_set_text(char *route_title, char *direction_title, char *stop_title, char *prediction, char *minutes_label) {
     text_layer_set_text(route_title_layer, route_title);
     text_layer_set_text(direction_title_layer, direction_title);
     text_layer_set_text(stop_title_layer, stop_title);
+    text_layer_set_text(stop_prediction_layer, prediction);
+    text_layer_set_text(minutes_text_layer, minutes_label);
+}
 
-    prediction_text = format_prediction(prediction);
-    text_layer_set_text(stop_prediction_layer, prediction_text);
-    text_layer_set_text(minutes_text_layer, "minutes");
+/*
+ * Upon receiving prediction data, set the text fields appropriately
+ */
+static void on_prediction_loaded(char *prediction, char *minutes_label) {
+    current_stop->prediction = prediction;
+    current_stop->minutes_label = minutes_label;
+    text_layer_set_text(stop_prediction_layer, current_stop->prediction);
+    text_layer_set_text(minutes_text_layer, current_stop->minutes_label);
 }
 
 /*
@@ -298,10 +283,10 @@ static void stop_window_load(Window *window) {
 
     // Create stop_eta
     stop_prediction_layer = text_layer_create((GRect) {
-        .origin = { 0, 100 },
+        .origin = { 0, 95 },
         .size = { bounds.size.w, bounds.size.h }
     });
-    text_layer_set_font(stop_prediction_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+    text_layer_set_font(stop_prediction_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
     text_layer_set_text_alignment(stop_prediction_layer, GTextAlignmentCenter);
     text_layer_set_overflow_mode(stop_prediction_layer, GTextOverflowModeTrailingEllipsis);
     text_layer_set_text_color(stop_prediction_layer, GColorBlack);
@@ -310,14 +295,14 @@ static void stop_window_load(Window *window) {
 
     // Create "minutes" text with small font
     minutes_text_layer = text_layer_create((GRect) {
-        .origin = { 0, 130 },
+        .origin = { 0, 125 },
         .size = { bounds.size.w, bounds.size.h }
     });
     text_layer_set_font(minutes_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
     text_layer_set_text_alignment(minutes_text_layer, GTextAlignmentCenter);
     text_layer_set_overflow_mode(minutes_text_layer, GTextOverflowModeTrailingEllipsis);
     text_layer_set_text_color(minutes_text_layer, GColorBlack);
-    text_layer_set_background_color(minutes_text_layer, GColorWhite);
+    text_layer_set_background_color(minutes_text_layer, GColorClear);
     layer_add_child(window_layer, text_layer_get_layer(minutes_text_layer));
 }
 
@@ -325,7 +310,15 @@ static void stop_window_load(Window *window) {
  * Called when the window resumes after already being loaded.
  */
 static void stop_window_appear(Window *window) {
-    stop_window_set_text("test", "test", "test", (int[2]){ 1, 2 });
+    // Request prediction data from android
+    sync_get_prediction(current_stop->route_tag, current_section->stop_tag, on_prediction_loaded);
+
+    // Set text with placeholder for prediction
+    stop_window_set_text(current_stop->route_title,
+                         current_stop->direction_title,
+                         current_section->stop_title,
+                         "Loading...", 
+                         "");
 }
 
 /*
@@ -372,6 +365,9 @@ static void init_stop_window() {
 static void on_stops_loaded(StopList *loaded_stop_list) {
     stop_list = loaded_stop_list;
 
+    // For debugging purposes:
+    // dump_stop_list(stop_list);
+
     // Done loading; push menu window with loaded stops
     on_splash = false;
     APP_LOG(APP_LOG_LEVEL_DEBUG, "Pushing menu to screen");
@@ -409,6 +405,7 @@ static void deinit(void) {
     window_destroy(splash_window);
     window_destroy(menu_window);
     window_destroy(stop_window);
+    stop_list_destroy(stop_list);
 }
 
 int main(void) {

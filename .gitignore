@@ -4,3 +4,4 @@ build
 .lock-waf_darwin_build
 *.sublime-project
 *.sublime-workspace
+pebble-screenshot*.png
