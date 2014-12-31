@@ -1,0 +1,135 @@
+#include <pebble.h>
+#include "stops_menu.h"
+
+static MenuLayer *menu_layer;
+
+/*
+ * Called when stops have been loaded from phone
+ */
+static void on_stops_loaded(StopList *loaded_stop_list) {
+    stop_list = loaded_stop_list;
+
+    // For debugging purposes:
+    // dump_stop_list(stop_list);
+
+    // // Done loading; push menu window with loaded stops
+    // on_splash = false;
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Pushing menu to screen");
+    // window_stack_push(stops_menu_window, true /* animated */);
+    // window_stack_remove(splash_window, false /* animated */);
+}
+
+/*
+ * Returns the section count of the menu
+ */
+static uint16_t menu_get_num_sections_callback(MenuLayer *menu_layer, void *data) {
+    return stop_list->section_count;
+}
+
+/*
+ * Returns the row count of the section at section_index
+ */
+static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+    return stop_list->sections[section_index]->stop_count;
+}
+
+/*
+ * Returns the height of the section header of the section at section_index
+ */
+static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+    // Twice the default height
+    return 2 * MENU_CELL_BASIC_HEADER_HEIGHT;
+}
+
+/*
+ * Draws the section header at section_index
+ */
+static void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t section_index, void *data) {
+    menu_cell_basic_header_draw(ctx, cell_layer, stop_list->sections[section_index]->stop_title);
+}
+
+/*
+ * Draws the section header at cell_index
+ */
+static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
+    Stop *stop = stop_list->sections[cell_index->section]->stops[cell_index->row];
+    char *title = stop->route_title;
+    char *subtitle = stop->direction_title;
+    menu_cell_basic_draw(ctx, cell_layer, title, subtitle, NULL);
+}
+
+/*
+ * Called when the user selects a menu item.
+ * Open the stop window with the selected stop information.
+ */
+static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
+    current_section = stop_list->sections[cell_index->section];
+    current_stop = current_section->stops[cell_index->row];
+    window_stack_push(stop_window, true /* animated */);
+}
+
+
+/*
+ * Called when the window is first pushed to the screen when it's not already loaded.
+ * Do the layout of the window.
+ */
+static void menu_window_load(Window *window) {
+    Layer *window_layer = window_get_root_layer(window);
+    GRect bounds = layer_get_frame(window_layer);
+
+    // Create the menu layer
+    menu_layer = menu_layer_create(bounds);
+
+    // Set all the callbacks for the menu layer
+    menu_layer_set_callbacks(menu_layer, NULL, (MenuLayerCallbacks) {
+        .get_num_sections = menu_get_num_sections_callback,
+        .get_num_rows = menu_get_num_rows_callback,
+        .get_header_height = menu_get_header_height_callback,
+        .draw_header = menu_draw_header_callback,
+        .draw_row = menu_draw_row_callback,
+        .select_click = menu_select_callback,
+    });
+
+    // Bind the menu layer's click config provider to the window for interactivity
+    menu_layer_set_click_config_onto_window(menu_layer, window);
+
+    // Add it to the window for display
+    layer_add_child(window_layer, menu_layer_get_layer(menu_layer));
+}
+
+/*
+ * Called when the window resumes after already being loaded.
+ */
+static void menu_window_appear(Window *window) {
+
+}
+
+/*
+ * Called when the window leaves the screen.
+ */
+static void menu_window_disappear(Window *window) {
+
+}
+
+/*
+ * Called when the window is removed from the window stack.
+ * Destroy any layers associated with the window.
+ */
+static void menu_window_unload(Window *window) {
+    menu_layer_destroy(menu_layer);
+}
+
+/*
+ * Create the menu window and set handlers.
+ * Return the created window.
+ */
+Window *init_menu_window() {
+    stops_menu_window = window_create();
+    window_set_window_handlers(stops_menu_window, (WindowHandlers) {
+        .load = menu_window_load,
+        .appear = menu_window_appear,
+        .disappear = menu_window_disappear,
+        .unload = menu_window_unload,
+    });
+    return stops_menu_window;
+}

@@ -2,27 +2,18 @@
 #include "data.h"
 #include "sync.h"
 
-// Whether we are currently on the splash screen
-static bool on_splash;
-// Window for splash
-static Window *splash_window;
-// Bitmap for logo
-static GBitmap *image;
-// Layer for bitmap
-static BitmapLayer *image_layer;
+#include "windows/tabs_menu.h"
+// #include "windows/stops_menu.h"
+// #include "windows/stop_window.h"
 
-// The window which displays a list of stops
-static Window *menu_window;
-static MenuLayer *menu_layer;
+// The menu listing "NEARBY" and "SAVED"
+static Window *tab_menu_window;
 
-// The window which displays information about a single stop
-static Window *stop_window;
-static TextLayer *route_title_layer;
-static TextLayer *direction_title_layer;
-static TextLayer *stop_title_layer;
-static TextLayer *stop_prediction_layer;
-static TextLayer *minutes_text_layer;
-static char *prediction_text;
+// // The window which displays a list of stops
+// static Window *stops_menu_window;
+
+// // The window which displays information about a single stop
+// static Window *stop_window;
 
 // A list of stops by section
 static StopList *stop_list;
@@ -30,386 +21,77 @@ static StopList *stop_list;
 static StopSection *current_section;
 static Stop *current_stop;
 
-/**********************************************************
- ** SPLASH
- **********************************************************/
-
 /*
- * Called when the window is first pushed to the screen when it's not already loaded.
- * Do the layout of the window.
+ * Called when the user selects the "NEARBY" menu item.
+ * Wait for bluetooth if necessary, then open the stop list window, requesting nearby stops.
  */
-static void splash_window_load(Window *window) {
-    Layer *window_layer = window_get_root_layer(splash_window);
-    GRect bounds = layer_get_frame(window_layer);
-
-    // Set background to black
-    window_set_background_color(splash_window, GColorBlack);
-
-    // Create image layer
-    image = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_LOGO);
-    image_layer = bitmap_layer_create(bounds);
-    bitmap_layer_set_bitmap(image_layer, image);
-    bitmap_layer_set_alignment(image_layer, GAlignCenter);
-    layer_add_child(window_layer, bitmap_layer_get_layer(image_layer));
-}
-
-/*
- * Called when the window resumes after already being loaded.
- */
-static void splash_window_appear(Window *window) {
+static void on_nearby_selected(void) {
 
 }
 
 /*
- * Called when the window leaves the screen.
+ * Called when the user selects the "SAVED" menu item.
+ * Wait for bluetooth if necessary, then open the stop list window, requesting saved stops.
  */
-static void splash_window_disappear(Window *window) {
-    
-}
-
-/*
- * Called when the window is removed from the window stack.
- * Destroy any layers associated with the window.
- */
-static void splash_window_unload(Window *window) {
-    gbitmap_destroy(image);
-    bitmap_layer_destroy(image_layer);
-}
-
-/*
- * Display a splash screen
- */
-static void init_splash_window(void) {
-    splash_window = window_create();
-    window_set_window_handlers(splash_window, (WindowHandlers) {
-        .load = splash_window_load,
-        .appear = splash_window_appear,
-        .disappear = splash_window_disappear,
-        .unload = splash_window_unload,
-    });
-}
-
-/**********************************************************
- ** MENU
- **********************************************************/
-
-/*
- * Returns the section count of the menu
- */
-static uint16_t menu_get_num_sections_callback(MenuLayer *menu_layer, void *data) {
-    return stop_list->section_count;
-}
-
-/*
- * Returns the row count of the section at section_index
- */
-static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
-    return stop_list->sections[section_index]->stop_count;
-}
-
-/*
- * Returns the height of the section header of the section at section_index
- */
-static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
-    // Twice the default height
-    return 2 * MENU_CELL_BASIC_HEADER_HEIGHT;
-}
-
-/*
- * Draws the section header at section_index
- */
-static void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t section_index, void *data) {
-    menu_cell_basic_header_draw(ctx, cell_layer, stop_list->sections[section_index]->stop_title);
-}
-
-/*
- * Draws the section header at cell_index
- */
-static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
-    Stop *stop = stop_list->sections[cell_index->section]->stops[cell_index->row];
-    char *title = stop->route_title;
-    char *subtitle = stop->direction_title;
-    menu_cell_basic_draw(ctx, cell_layer, title, subtitle, NULL);
-}
-
-/*
- * Called when the user selects a menu item.
- * Open the stop window with the selected stop information.
- */
-static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
-    current_section = stop_list->sections[cell_index->section];
-    current_stop = current_section->stops[cell_index->row];
-    window_stack_push(stop_window, true /* animated */);
-}
-
-/**********************************************************
- ** MENU WINDOW
- **********************************************************/
-
-/*
- * Called when the window is first pushed to the screen when it's not already loaded.
- * Do the layout of the window.
- */
-static void menu_window_load(Window *window) {
-    Layer *window_layer = window_get_root_layer(window);
-    GRect bounds = layer_get_frame(window_layer);
-
-    // Create the menu layer
-    menu_layer = menu_layer_create(bounds);
-
-    // Set all the callbacks for the menu layer
-    menu_layer_set_callbacks(menu_layer, NULL, (MenuLayerCallbacks) {
-        .get_num_sections = menu_get_num_sections_callback,
-        .get_num_rows = menu_get_num_rows_callback,
-        .get_header_height = menu_get_header_height_callback,
-        .draw_header = menu_draw_header_callback,
-        .draw_row = menu_draw_row_callback,
-        .select_click = menu_select_callback,
-    });
-
-    // Bind the menu layer's click config provider to the window for interactivity
-    menu_layer_set_click_config_onto_window(menu_layer, window);
-
-    // Add it to the window for display
-    layer_add_child(window_layer, menu_layer_get_layer(menu_layer));
-}
-
-/*
- * Called when the window resumes after already being loaded.
- */
-static void menu_window_appear(Window *window) {
+static void on_saved_selected(void) {
 
 }
 
 /*
- * Called when the window leaves the screen.
+ * When bluetooth connection is available, initialize data sync
  */
-static void menu_window_disappear(Window *window) {
-
+static void on_bluetooth_connection(bool connected) {
+    // Initialize sync and request stop data from phone
+    // init_sync();
+    // sync_get_stops(on_stops_loaded);
 }
 
 /*
- * Called when the window is removed from the window stack.
- * Destroy any layers associated with the window.
- */
-static void menu_window_unload(Window *window) {
-    menu_layer_destroy(menu_layer);
-}
-
-/*
- * Create the menu window and set handlers
- */
-static void init_menu_window() {
-    menu_window = window_create();
-    window_set_window_handlers(menu_window, (WindowHandlers) {
-        .load = menu_window_load,
-        .appear = menu_window_appear,
-        .disappear = menu_window_disappear,
-        .unload = menu_window_unload,
-    });
-}
-
-/**********************************************************
- ** STOP WINDOW
- **********************************************************/
-
-/*
- * Set the text in the stop window
- */
-static void stop_window_set_text(char *route_title, char *direction_title, char *stop_title, char *prediction, char *minutes_label) {
-    text_layer_set_text(route_title_layer, route_title);
-    text_layer_set_text(direction_title_layer, direction_title);
-    text_layer_set_text(stop_title_layer, stop_title);
-    text_layer_set_text(stop_prediction_layer, prediction);
-    text_layer_set_text(minutes_text_layer, minutes_label);
-}
-
-/*
- * Upon receiving prediction data, set the text fields appropriately
- */
-static void on_prediction_loaded(char *prediction, char *minutes_label) {
-    current_stop->prediction = prediction;
-    current_stop->minutes_label = minutes_label;
-    text_layer_set_text(stop_prediction_layer, current_stop->prediction);
-    text_layer_set_text(minutes_text_layer, current_stop->minutes_label);
-}
-
-/*
- * Called when the window is first pushed to the screen when it's not already loaded.
- * Do the layout of the window.
- */
-static void stop_window_load(Window *window) {
-    Layer *window_layer = window_get_root_layer(window);
-    GRect bounds = layer_get_bounds(window_layer);
-
-    // Set background color to black
-    window_set_background_color(stop_window, GColorBlack);
-
-    // Create route_title
-    route_title_layer = text_layer_create((GRect) {
-        .origin = { 0, 0 },
-        .size = { bounds.size.w, 28 }
-    });
-    text_layer_set_font(route_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-    text_layer_set_text_alignment(route_title_layer, GTextAlignmentCenter);
-    text_layer_set_overflow_mode(route_title_layer, GTextOverflowModeTrailingEllipsis);
-    text_layer_set_text_color(route_title_layer, GColorWhite);
-    text_layer_set_background_color(route_title_layer, GColorClear);
-    layer_add_child(window_layer, text_layer_get_layer(route_title_layer));
-
-    // Create direction_title
-    direction_title_layer = text_layer_create((GRect) {
-        .origin = { 0, 28 },
-        .size = { bounds.size.w, 40 }
-    });
-    text_layer_set_font(direction_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
-    text_layer_set_text_alignment(direction_title_layer, GTextAlignmentCenter);
-    text_layer_set_overflow_mode(direction_title_layer, GTextOverflowModeTrailingEllipsis);
-    text_layer_set_text_color(direction_title_layer, GColorWhite);
-    text_layer_set_background_color(direction_title_layer, GColorClear);
-    layer_add_child(window_layer, text_layer_get_layer(direction_title_layer));
-
-    // Create stop_title
-    stop_title_layer = text_layer_create((GRect) {
-        .origin = { 0, 60 },
-        .size = { bounds.size.w, 40 }
-    });
-    text_layer_set_font(stop_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-    text_layer_set_text_alignment(stop_title_layer, GTextAlignmentCenter);
-    text_layer_set_overflow_mode(stop_title_layer, GTextOverflowModeTrailingEllipsis);
-    text_layer_set_text_color(stop_title_layer, GColorWhite);
-    text_layer_set_background_color(stop_title_layer, GColorClear);
-    layer_add_child(window_layer, text_layer_get_layer(stop_title_layer));
-
-    // Create stop_eta
-    stop_prediction_layer = text_layer_create((GRect) {
-        .origin = { 0, 95 },
-        .size = { bounds.size.w, bounds.size.h }
-    });
-    text_layer_set_font(stop_prediction_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-    text_layer_set_text_alignment(stop_prediction_layer, GTextAlignmentCenter);
-    text_layer_set_overflow_mode(stop_prediction_layer, GTextOverflowModeTrailingEllipsis);
-    text_layer_set_text_color(stop_prediction_layer, GColorBlack);
-    text_layer_set_background_color(stop_prediction_layer, GColorWhite);
-    layer_add_child(window_layer, text_layer_get_layer(stop_prediction_layer));
-
-    // Create "minutes" text with small font
-    minutes_text_layer = text_layer_create((GRect) {
-        .origin = { 0, 125 },
-        .size = { bounds.size.w, bounds.size.h }
-    });
-    text_layer_set_font(minutes_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-    text_layer_set_text_alignment(minutes_text_layer, GTextAlignmentCenter);
-    text_layer_set_overflow_mode(minutes_text_layer, GTextOverflowModeTrailingEllipsis);
-    text_layer_set_text_color(minutes_text_layer, GColorBlack);
-    text_layer_set_background_color(minutes_text_layer, GColorClear);
-    layer_add_child(window_layer, text_layer_get_layer(minutes_text_layer));
-}
-
-/*
- * Called when the window resumes after already being loaded.
- */
-static void stop_window_appear(Window *window) {
-    // Request prediction data from android
-    sync_get_prediction(current_stop->route_tag, current_section->stop_tag, on_prediction_loaded);
-
-    // Set text with placeholder for prediction
-    stop_window_set_text(current_stop->route_title,
-                         current_stop->direction_title,
-                         current_section->stop_title,
-                         "Loading...", 
-                         "");
-}
-
-/*
- * Called when the window leaves the screen.
- */
-static void stop_window_disappear(Window *window) {
-
-}
-
-/*
- * Called when the window is removed from the window stack.
- * Destroy any layers associated with the window.
- */
-static void stop_window_unload(Window *window) {
-    text_layer_destroy(route_title_layer);
-    text_layer_destroy(direction_title_layer);
-    text_layer_destroy(stop_title_layer);
-    text_layer_destroy(stop_prediction_layer);
-    text_layer_destroy(minutes_text_layer);
-    free(prediction_text);
-}
-
-/*
- * Create the stop window and set handlers
- */
-static void init_stop_window() {
-    stop_window = window_create();
-    // window_set_click_config_provider(stop_window, click_config_provider);
-    window_set_window_handlers(stop_window, (WindowHandlers) {
-        .load = stop_window_load,
-        .appear = stop_window_appear,
-        .disappear = stop_window_disappear,
-        .unload = stop_window_unload,
-    });
-}
-
-/**********************************************************
- ** MAIN
- **********************************************************/
-
-/*
- * Called when stops have been loaded from android
- */
-static void on_stops_loaded(StopList *loaded_stop_list) {
-    stop_list = loaded_stop_list;
-
-    // For debugging purposes:
-    // dump_stop_list(stop_list);
-
-    // Done loading; push menu window with loaded stops
-    on_splash = false;
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Pushing menu to screen");
-    window_stack_push(menu_window, true /* animated */);
-    window_stack_remove(splash_window, false /* animated */);
-}
-
-/*
- * Show splash with logo and load a menu of stops from android
+ * Show splash with logo and load a menu of stops from phone
  */
 static void init(void) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Initializing FTW");
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Initializing Faster Than Walking");
 
-    // Starting on splash screen
-    on_splash = true;
+    // Create and push the tab menu window
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Creating tab menu");
+    tab_menu_window = init_tabs_menu_window(NULL, NULL);
+    window_stack_push(tab_menu_window, true /* animated */);
 
-    // Show the splash screen
-    init_splash_window();
-    window_stack_push(splash_window, true /* animated */);
+    // // Create stop menu window and set window handlers
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Creating stop menu");
+    // stop_menu_window = init_stop_menu_window();
 
-    // Create menu window and set window handlers
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Creating menu");
-    init_menu_window();
+    // // Create stop window and set window handlers
+    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Creating stop window");
+    // stop_window = init_stop_window();
 
-    // Create stop window and set window handlers
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Creating stop window");
-    init_stop_window();
-
-    // Initialize sync and request stop data from android
-    init_sync();
-    sync_get_stops(on_stops_loaded);
+    // Require bluetooth connection
+    if (bluetooth_connection_service_peek()) {
+        // Bluetooth is connected now
+        on_bluetooth_connection(true);
+    } else {
+        // Wait for connection
+        bluetooth_connection_service_subscribe(on_bluetooth_connection);
+    }
 }
 
 static void deinit(void) {
-    window_destroy(splash_window);
-    window_destroy(menu_window);
-    window_destroy(stop_window);
-    stop_list_destroy(stop_list);
+    window_destroy(tab_menu_window);
+    // window_destroy(stops_menu_window);
+    // window_destroy(stop_window);
+    // stop_list_destroy(stop_list);
 }
 
+/*
+ * Entry point
+ */
 int main(void) {
+    // Initialize windows and register event handlers
     init();
+
+    // Enter the main event loop. This will block until the app is ready to exit.
     app_event_loop();
+
+    // De-allocate resources before exiting
     deinit();
 }
