@@ -11,15 +11,25 @@
   "resources": {
     "media": [
       {
-        "type": "png",
-        "name": "IMAGE_LOGO",
-        "file": "images/pebble-app-icon-large.png"
-      },
-      {
         "menuIcon": true,
         "type": "png",
-        "name": "IMAGE_MENU_ICON",
-        "file": "images/pebble-menu-image.png"
+        "name": "MENU_ICON",
+        "file": "images/ic_menu.png"
+      },
+      {
+        "type": "png",
+        "name": "LOGO",
+        "file": "images/ic_logo_large.png"
+      },
+      {
+        "type": "png",
+        "name": "LOCATION_ICON",
+        "file": "images/ic_location.png"
+      },
+      {
+        "type": "png",
+        "name": "STAR_ICON",
+        "file": "images/ic_star.png"
       }
     ]
   }
